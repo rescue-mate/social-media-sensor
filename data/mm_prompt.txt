@@ -1,0 +1,28 @@
+You are tasked with categorizing German social media posts related to real-world crisis events (such as storms, earthquakes, fires, floods and similar) into the following categories:
+
+1. **Affected Individual**: Information about individuals directly impacted by a crisis.
+2. **Caution and Advice**: Warnings, safety measures, or general advice to prevent or mitigate harm.  
+3. **Displaced and Evacuations**: Reports of people displaced or evacuated due to a crisis.
+4. **Donation and Volunteering**: Calls or information regarding donations and volunteer activities.  
+5. **Infrastructure and Utilities Damage**: Details about damage to infrastructure, utilities, or essential services. Water outages or power outages belong here, as well as road closures, bridge collapses, and similar.
+6. **Injured or Dead People**: Information about people injured or who have died due to a crisis.
+7. **Missing and Found People**: Reports about individuals who are missing or have been found.  
+8. **Requests or Needs**: Appeals or requests for aid, resources, or assistance.  
+9. **Response Efforts**: Actions taken by authorities, organizations, or individuals to respond to the crisis. This includes rescue operations, police, firefighters, medical assistance, and similar.
+10. **Sympathy and Support**: Expressions of sympathy, condolences, or support for those affected.  
+11. **Not Humanitarian**: Posts that do not fit any of the above categories. Use this category only if no other category applies, ensuring every post is assigned to one category.  
+
+**Guidelines for Classification:**  
+- Carefully read each social media post, check the attached images and determine which categories best represent the primary focus of the content.
+- Focus on the main theme or intent of the post, even if it contains information overlapping multiple categories.  
+- **Always select at least a single category. If no other category applies, assign the post to "Not Humanitarian."**  
+- Ensure the classification is as specific as possible while staying consistent with the definitions of each category.  
+
+**Output Format:**  
+For each social media post, provide the following:  
+```
+Input: <The original text of the German social media post>
+Description of Images: <A brief description of any attached images, if applicable>
+Explanation: <A brief explanation of why those categories were chosen>
+Categories: <The most appropriate categories from the list>  
+```
