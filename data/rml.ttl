@@ -1,0 +1,222 @@
+@prefix rr: <http://www.w3.org/ns/r2rml#> .
+@prefix rml: <http://semweb.mmlab.be/ns/rml#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ql: <http://semweb.mmlab.be/ns/ql#> .
+@prefix map: <http://mapping.example.com/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sd: <http://www.w3.org/ns/sparql-service-description#> .
+@prefix sm: <http://social_media_data.com/> .
+@prefix smp: <http://social_media_data.com/posts/> .
+@prefix sml: <http://social_media_data.com/locations/> .
+@prefix smpl: <http://social_media_data.com/platforms/> .
+@prefix smc: <http://social_media_data.com/categories/> .
+@prefix carml: <http://carml.taxonic.com/carml/> .
+
+map:map_location_000 rml:logicalSource map:source_001 ;
+	rdf:type rr:TriplesMap ;
+	rdfs:label "location" ;
+	rr:predicateObjectMap map:pom_007, map:pom_008, map:pom_009, map:pom_010, map:pom_011, map:pom_012, map:pom_013, map:pom_014 ;
+	rr:subjectMap map:s_001 .
+
+map:map_post_000 rml:logicalSource map:source_000 ;
+	rdf:type rr:TriplesMap ;
+	rdfs:label "post" ;
+	rr:predicateObjectMap map:pom_000, map:pom_001, map:pom_002, map:pom_003, map:pom_004, map:pom_005, map:pom_006 ;
+	rr:subjectMap map:s_000 .
+
+map:om_000 rdf:type rr:ObjectMap ;
+	rr:constant sm:Post ;
+	rr:termType rr:IRI .
+
+map:om_001 rml:reference "text" ;
+	rdf:type rr:ObjectMap ;
+	rr:termType rr:Literal .
+
+map:om_002 rml:reference "created_at" ;
+	rdf:type rr:ObjectMap ;
+	rr:datatype xsd:dateTime ;
+	rr:termType rr:Literal .
+
+map:om_003 rdf:type rr:ObjectMap ;
+	rr:template "http://social_media_data.com/platforms/{platform}" ;
+	rr:termType rr:IRI .
+
+map:om_004 rml:reference "user" ;
+	rdf:type rr:ObjectMap ;
+	rr:termType rr:Literal .
+
+map:om_005 rdf:type rr:ObjectMap ;
+	rr:template "http://social_media_data.com/categories/{prediction}" ;
+	rr:termType rr:IRI .
+
+map:om_006 rdf:type rr:ObjectMap ;
+	rr:template "http://social_media_data.com/{geo_linked_entities[*].place_id}" ;
+	rr:termType rr:IRI .
+
+map:om_007 rdf:type rr:ObjectMap ;
+	rr:constant sm:Location ;
+	rr:termType rr:IRI .
+
+map:om_008 rml:reference "name" ;
+	rdf:type rr:ObjectMap ;
+	rr:termType rr:Literal .
+
+map:om_009 rml:reference "lat" ;
+	rdf:type rr:ObjectMap ;
+	rr:datatype xsd:decimal ;
+	rr:termType rr:Literal .
+
+map:om_010 rml:reference "lon" ;
+	rdf:type rr:ObjectMap ;
+	rr:datatype xsd:decimal ;
+	rr:termType rr:Literal .
+
+map:om_011 rml:reference "address.road" ;
+	rdf:type rr:ObjectMap ;
+	rr:termType rr:Literal .
+
+map:om_012 rml:reference "address.city" ;
+	rdf:type rr:ObjectMap ;
+	rr:termType rr:Literal .
+
+map:om_013 rml:reference "address.postcode" ;
+	rdf:type rr:ObjectMap ;
+	rr:termType rr:Literal .
+
+map:om_014 rml:reference "address.country" ;
+	rdf:type rr:ObjectMap ;
+	rr:termType rr:Literal .
+
+map:pm_000 rdf:type rr:PredicateMap ;
+	rr:constant rdf:type .
+
+map:pm_001 rdf:type rr:PredicateMap ;
+	rr:constant sm:text .
+
+map:pm_002 rdf:type rr:PredicateMap ;
+	rr:constant sm:created_at .
+
+map:pm_003 rdf:type rr:PredicateMap ;
+	rr:constant sm:platform .
+
+map:pm_004 rdf:type rr:PredicateMap ;
+	rr:constant sm:user .
+
+map:pm_005 rdf:type rr:PredicateMap ;
+	rr:constant sm:predicted_category .
+
+map:pm_006 rdf:type rr:PredicateMap ;
+	rr:constant sm:location .
+
+map:pm_007 rdf:type rr:PredicateMap ;
+	rr:constant rdf:type .
+
+map:pm_008 rdf:type rr:PredicateMap ;
+	rr:constant sm:name .
+
+map:pm_009 rdf:type rr:PredicateMap ;
+	rr:constant sm:latitude .
+
+map:pm_010 rdf:type rr:PredicateMap ;
+	rr:constant sm:longitude .
+
+map:pm_011 rdf:type rr:PredicateMap ;
+	rr:constant sm:road .
+
+map:pm_012 rdf:type rr:PredicateMap ;
+	rr:constant sm:city .
+
+map:pm_013 rdf:type rr:PredicateMap ;
+	rr:constant sm:postcode .
+
+map:pm_014 rdf:type rr:PredicateMap ;
+	rr:constant sm:country .
+
+map:pom_000 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_000 ;
+	rr:predicateMap map:pm_000 .
+
+map:pom_001 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_001 ;
+	rr:predicateMap map:pm_001 .
+
+map:pom_002 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_002 ;
+	rr:predicateMap map:pm_002 .
+
+map:pom_003 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_003 ;
+	rr:predicateMap map:pm_003 .
+
+map:pom_004 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_004 ;
+	rr:predicateMap map:pm_004 .
+
+map:pom_005 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_005 ;
+	rr:predicateMap map:pm_005 .
+
+map:pom_006 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_006 ;
+	rr:predicateMap map:pm_006 .
+
+map:pom_007 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_007 ;
+	rr:predicateMap map:pm_007 .
+
+map:pom_008 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_008 ;
+	rr:predicateMap map:pm_008 .
+
+map:pom_009 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_009 ;
+	rr:predicateMap map:pm_009 .
+
+map:pom_010 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_010 ;
+	rr:predicateMap map:pm_010 .
+
+map:pom_011 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_011 ;
+	rr:predicateMap map:pm_011 .
+
+map:pom_012 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_012 ;
+	rr:predicateMap map:pm_012 .
+
+map:pom_013 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_013 ;
+	rr:predicateMap map:pm_013 .
+
+map:pom_014 rdf:type rr:PredicateObjectMap ;
+	rr:objectMap map:om_014 ;
+	rr:predicateMap map:pm_014 .
+
+map:rules_000 <http://rdfs.org/ns/void#exampleResource> map:map_location_000, map:map_post_000 ;
+	rdf:type <http://rdfs.org/ns/void#Dataset> .
+
+map:s_000 rdf:type rr:SubjectMap ;
+	rr:template "http://social_media_data.com/posts/{post_id}" .
+
+map:s_001 rdf:type rr:SubjectMap ;
+	rr:template "http://social_media_data.com/locations/{place_id}" .
+
+map:source_000 rml:iterator "$[*]" ;
+	rml:referenceFormulation ql:JSONPath ;
+	rml:source [
+       a carml:Stream ;
+       carml:streamName "input"
+    ] ;
+	rdf:type rml:LogicalSource ;
+	rdfs:label "posts_data" .
+
+map:source_001 rml:iterator "$[*].geo_linked_entities[*]" ;
+	rml:referenceFormulation ql:JSONPath ;
+	rml:source [
+       a carml:Stream ;
+       carml:streamName "input"
+    ] ;
+	rdf:type rml:LogicalSource ;
+	rdfs:label "location_data" .
+

@@ -1,0 +1,206 @@
+Input: Endlich Feierabend! Sitze gerade am Alexanderplatz U-Bahn und warte auf die Bahn. Danach geht’s noch kurz zu REWE in der Friedrichstraße.
+Explanation:
+- "Alexanderplatz U-Bahn" is a public transport hub → `location-stop`
+- "REWE" is a supermarket chain → `organization-company`
+- "Friedrichstraße" is a street → `location-street`
+
+Extracted Entities:
+[
+    {
+        "entity": "Alexanderplatz U-Bahn",
+        "type": "location-stop",
+        "street": null,
+        "district": "Mitte",
+        "city": "Berlin",
+        "country": "Deutschland"
+    },
+    {
+        "entity": "REWE",
+        "type": "organization-company",
+        "street": "Friedrichstraße",
+        "district": "Mitte",
+        "city": "Berlin",
+        "country": "Deutschland"
+    },
+    {
+        "entity": "Friedrichstraße",
+        "type": "location-street",
+        "street": "Friedrichstraße",
+        "district": "Mitte",
+        "city": "Berlin",
+        "country": "Deutschland"
+    }
+]
+
+Input: Heute wieder ein Meeting bei der Deutschen Bank in Frankfurt. Zum Glück liegt das direkt an der Hauptwache S-Bahn.
+Explanation:
+- "Deutsche Bank" is a financial institution → `organization-company`
+- "Frankfurt" is a city → `location-city`
+- "Hauptwache S-Bahn" is a train station → `location-stop`
+
+Extracted Entities:
+[
+    {
+        "entity": "Deutsche Bank",
+        "type": "organization-company",
+        "street": null,
+        "district": "Innenstadt",
+        "city": "Frankfurt",
+        "country": "Deutschland"
+    },
+    {
+        "entity": "Frankfurt",
+        "type": "location-city",
+        "street": null,
+        "district": null,
+        "city": "Frankfurt",
+        "country": "Deutschland"
+    },
+    {
+        "entity": "Hauptwache S-Bahn",
+        "type": "location-stop",
+        "street": null,
+        "district": "Innenstadt",
+        "city": "Frankfurt",
+        "country": "Deutschland"
+    }
+]
+
+Input: Das Rote Kreuz hat eine neue Zentrale am Potsdamer Platz eröffnet – richtig modern!
+Explanation:
+- "Rotes Kreuz" is an NGO → `organization`
+- "Potsdamer Platz" is a central location/landmark → `location`
+
+Extracted Entities:
+[
+    {
+        "entity": "Rotes Kreuz",
+        "type": "organization",
+        "street": null,
+        "district": "Tiergarten",
+        "city": "Berlin",
+        "country": "Deutschland"
+    },
+    {
+        "entity": "Potsdamer Platz",
+        "type": "location",
+        "street": null,
+        "district": "Tiergarten",
+        "city": "Berlin",
+        "country": "Deutschland"
+    }
+]
+
+Input: Nach dem Spaziergang durch den Englischen Garten in München gab's ein Eis bei EDEKA an der Leopoldstraße.
+Explanation:
+- "Englischer Garten" is a park → `location`
+- "München" is a city → `location-city`
+- "EDEKA" is a supermarket chain → `organization-company`
+- "Leopoldstraße" is a street → `location-street`
+
+Extracted Entities:
+[
+    {
+        "entity": "Englischer Garten",
+        "type": "location",
+        "street": null,
+        "district": "Schwabing",
+        "city": "München",
+        "country": "Deutschland"
+    },
+    {
+        "entity": "München",
+        "type": "location-city",
+        "street": null,
+        "district": null,
+        "city": "München",
+        "country": "Deutschland"
+    },
+    {
+        "entity": "EDEKA",
+        "type": "organization-company",
+        "street": "Leopoldstraße",
+        "district": "Schwabing",
+        "city": "München",
+        "country": "Deutschland"
+    },
+    {
+        "entity": "Leopoldstraße",
+        "type": "location-street",
+        "street": "Leopoldstraße",
+        "district": "Schwabing",
+        "city": "München",
+        "country": "Deutschland"
+    }
+]
+
+Input: Bin heute früh mit der S-Bahn am Ostbahnhof Berlin angekommen, dann mit dem Bus weiter zur Charité. Musste noch schnell was aus dem Netto an der Invalidenstraße holen. Später Meeting bei Siemens in der Zentrale, gleich um die Ecke vom Tiergarten.
+Explanation:
+- "Ostbahnhof Berlin" is a railway station → `location-stop`
+- "Berlin" is a city → `location-city`
+- "Charité" is a major hospital/research institution → `organization`
+- "Netto" is a grocery store chain → `organization-company`
+- "Invalidenstraße" is a street in Berlin → `location-street`
+- "Siemens" is a major corporation → `organization-company`
+- "Tiergarten" refers to a well-known park → `location`
+
+Extracted Entities:
+[
+    {
+        "entity": "Ostbahnhof Berlin",
+        "type": "location-stop",
+        "street": "Koppenstraße",
+        "district": "Friedrichshain",
+        "city": "Berlin",
+        "country": "Deutschland"
+    },
+    {
+        "entity": "Berlin",
+        "type": "location-city",
+        "street": null,
+        "district": null,
+        "city": "Berlin",
+        "country": "Deutschland"
+    },
+    {
+        "entity": "Charité",
+        "type": "organization",
+        "street": "Charitéplatz",
+        "district": "Mitte",
+        "city": "Berlin",
+        "country": "Deutschland"
+    },
+    {
+        "entity": "Netto",
+        "type": "organization-company",
+        "street": "Invalidenstraße",
+        "district": "Mitte",
+        "city": "Berlin",
+        "country": "Deutschland"
+    },
+    {
+        "entity": "Invalidenstraße",
+        "type": "location-street",
+        "street": "Invalidenstraße",
+        "district": "Mitte",
+        "city": "Berlin",
+        "country": "Deutschland"
+    },
+    {
+        "entity": "Siemens",
+        "type": "organization-company",
+        "street": null,
+        "district": "Moabit",
+        "city": "Berlin",
+        "country": "Deutschland"
+    },
+    {
+        "entity": "Tiergarten",
+        "type": "location",
+        "street": null,
+        "district": "Tiergarten",
+        "city": "Berlin",
+        "country": "Deutschland"
+    }
+]
+

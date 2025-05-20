@@ -7,7 +7,7 @@ import pydantic_settings
 from src.models.combined.few_shot_multimodal_inference import InContextMMClassificationModel
 from src.models.geo_linker.geo_linker import GeoLinker
 from src.models.image.image_classifier import EventImageClassifier
-from src.models.text.config import load_model as load_model_
+import concurrent.futures
 from src.models.text.few_shot_inference import InContextClassificationModel
 from src.models.utils import MMWrapper, VLMWrapper, OAWrapper
 logger =  logging.getLogger(__name__)
@@ -48,12 +48,11 @@ class EventSensor:
                                     default_district=settings.geo_linker.default_district,
                                     num_candidates=settings.geo_linker.num_candidates,
                                     do_llm_filtering=settings.geo_linker.do_llm_filtering,
+                                    few_shots=settings.geo_linker.few_shots,
                                     do_collective_linking=settings.geo_linker.do_collective_linking)
 
-
-    def predict(self, messages: List[dict]):
-        # Each message consists of a text and/or image
-        logger.info("Classifying...")
+    def do_event_classification(self, messages):
+        logger.info("Start event classification")
         if self.text_classifier is not None and self.image_classifier is not None:
             texts = []
             images = []
@@ -100,25 +99,32 @@ class EventSensor:
                 }
                 for item, message in zip(response, messages)
             ]
+        logger.info("Event classification done.")
+        return responses
 
-        example_indices = []
-        texts_to_geo_link = []
-        logger.info("Linking geo entities...")
-        for idx, response in enumerate(responses):
-            all_labels = set(response["prediction"]) | set(response["collective_image_prediction"])
-            if self.always_geo_link or ("not_humanitarian" not in all_labels or len(all_labels) > 2):
-                example_indices.append(idx)
-                texts_to_geo_link.append(response["text"])
-            responses[idx]["geo_linked_entities"] = []
+    def predict(self, messages: List[dict]):
+        # Each message consists of a text and/or image
 
-        geo_links = self.geo_linker.link_texts(texts_to_geo_link)
-        for idx, geo_link in zip(example_indices, geo_links):
-            if responses[idx]["text"].strip():
-                responses[idx]["geo_linked_entities"] = geo_link
+        texts: List[str] = [x["text"] for x in messages]
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_classify = executor.submit(self.do_event_classification, messages)
+            future_geolink = executor.submit(self.geo_linker.link_texts, texts)
+
+            results = future_classify.result()
+            geo_links = future_geolink.result()
+
+        logger.info("Both classification and geo-linking complete.")
+
+        for result, geo_link in zip(results, geo_links):
+            if result["text"].strip():
+                result["geo_linked_entities"] = geo_link
+            else:
+                result["geo_linked_entities"] = []
 
         logger.info("Done")
 
-        return responses
+        return results
 
 
 
