@@ -14,16 +14,31 @@ You must identify and categorize entities into the following classes:
 ## **Guidelines for Extraction**
 1. **Identify and extract relevant entities** from the given text.
 2. **Classify each entity** into the most appropriate category from the list above.
-3. **Ensure accuracy and specificity** (e.g., classify *"München"* as `location-city`, not just `location`).
-4. **Maintain consistency** when handling abbreviations and full names (e.g., *"DB"* → `organization-company`, *"Deutsche Bahn"* → `organization-company`).
-5. **Ignore irrelevant entities** that do not fit the listed categories.
-6. **If there are obvious typographical errors**, you may correct them before extraction.
-7. **Be exhaustive** in your extraction, but avoid over-extraction of entities that are not relevant.
+3. **Add a street, district, city and country for each if specified in the text** to allow building search query later on. Only add it if it is mentioned in connection to the entity in the text. If not provided, leave these fields empty.
+4. **Ensure accuracy and specificity** (e.g., classify *"München"* as `location-city`, not just `location`).
+5. **Maintain consistency** when handling abbreviations and full names (e.g., *"DB"* → `organization-company`, *"Deutsche Bahn"* → `organization-company`).
+6. **Ignore irrelevant entities** that do not fit the listed categories.
+7. **If there are obvious typographical errors**, you may correct them before extraction.
+8. **Be exhaustive** in your extraction, but avoid over-extraction of entities that are not relevant.
 
 ## **Output Format**
 For each social media post, provide structured output:
 ```
 Input: <The original German social media text>
 Explanation: <Brief reasoning for classification of each entity>
-Extracted Entities: [(<Entity>, <Assigned Category>), ...]
+Extracted Entities:
+[
+    {
+        "entity": "<extracted entity>",
+        "type": "<entity type>",
+        "street": <street name>,
+        "district": <detailed location information>,
+        "city": <city name>,
+        "country": <country name>,
+    },
+    ...
+]
 ```
+
+Examples:
+

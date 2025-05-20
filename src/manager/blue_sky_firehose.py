@@ -115,26 +115,36 @@ class PostCollector:
                     print("Connected to WebSocket server!")
 
                     while True:
-                        await websocket.ping()  # Keep the connection alive
-                        message = await websocket.recv()
-
                         try:
-                            data = json.loads(message)  # Assuming the message is JSON
-                        except json.JSONDecodeError as e:
-                            print(f"Error decoding JSON: {e}")
-                            continue  # Skip this message if it's not valid JSON
+                            await asyncio.wait_for(websocket.ping(), timeout=5)
+                            message = await websocket.recv()
 
-                        if data.get("kind") == "commit":
-                            if data["commit"].get("operation") == "create":
-                                collection = data["commit"].get("collection")
-                                if collection == "app.bsky.feed.post":
-                                    post = data["commit"].get("record")
-                                    if post and "de" in set(post.get("langs", [])):
-                                        # Add the new post to the queue
-                                        post["platform"] = "bluesky"
-                                        await self.post_queue.put(post)
+                            try:
+                                data = json.loads(message)  # Assuming the message is JSON
+                            except json.JSONDecodeError as e:
+                                print(f"Error decoding JSON: {e}")
+                                continue  # Skip this message if it's not valid JSON
+
+                            if data.get("kind") == "commit":
+                                if data["commit"].get("operation") == "create":
+                                    collection = data["commit"].get("collection")
+                                    if collection == "app.bsky.feed.post":
+                                        post = data["commit"].get("record")
+                                        if post and "de" in set(post.get("langs", [])):
+                                            # Add the new post to the queue
+                                            post["platform"] = "bluesky"
+                                            await self.post_queue.put(post)
+                        except websockets.exceptions.ConnectionClosedError as e:
+                            print(f"Connection closed: {e}. Reconnecting...")
+                            break  # Break the inner loop to reconnect
+                        except asyncio.TimeoutError:
+                            print("Ping timeout. Reconnecting...")
+                            break  # Break the inner loop to reconnect
             except websockets.exceptions.ConnectionClosedError:
                 print("Connection closed, reconnecting...")
+            except asyncio.TimeoutError as e:
+                print(f"Connection timed out: {e}. Retrying in 5 seconds...")
+                await asyncio.sleep(5)  # Wait before attempting to reconnect
 
     def start(self):
         """Starts the WebSocket connection in the background."""

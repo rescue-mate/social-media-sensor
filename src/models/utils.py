@@ -1,13 +1,14 @@
 import abc
 import base64
 import copy
+import json
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
 import torch
-from openai import OpenAI
+from openai import OpenAI, BadRequestError
 from qwen_vl_utils import process_vision_info
 from torch.nn.utils.rnn import pad_sequence
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration, DynamicCache
@@ -16,9 +17,9 @@ logger =  logging.getLogger(__name__)
 
 
 class LLMWrapper:
-    def __init__(self, top_p = 0.95,
-                 temperature = 0.8,
-                 max_tokens = 256):
+    def __init__(self, top_p = 1.0,
+                 temperature = 0.0,
+                 max_tokens = 512):
         self.llm = None
         self.tokenizer = None
         self.top_p = top_p
@@ -183,16 +184,22 @@ class OAWrapper(LLMWrapper):
         self.request_pool = ThreadPoolExecutor(14)
 
     def send_request(self, x):
-        responses = self.client.chat.completions.create(
-            model=self.model_path,
-            messages=x,
-            max_completion_tokens=self.max_tokens,
-            temperature=self.temperature,
-            top_p=self.top_p,
-        )
+        try:
+            responses = self.client.chat.completions.create(
+                model=self.model_path,
+                messages=x,
+                max_completion_tokens=self.max_tokens,
+                temperature=self.temperature,
+                top_p=self.top_p,
+            )
+            logger.debug(f"Input:\n{json.dumps(x)}\n\n"
+                         f"Response:\n{responses.choices[0].message.content}")
+        except BadRequestError as e:
+            logger.error(f"Bad request: {e}")
+            return None
         return responses
     def generate(self, messages: list = None, batch_size=24):
         # responses = self.llm.generate(inputs, sampling_params=self.sampling_params)
         all_responses = list(self.request_pool.map(self.send_request, messages))
 
-        return [x.choices[0].message.content for x in all_responses]
+        return [x.choices[0].message.content if x is not None else "" for x in all_responses]

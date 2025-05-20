@@ -1,3 +1,5 @@
+import enum
+import logging
 from itertools import product
 from typing import List, Dict, Set
 from geopy.distance import geodesic, great_circle
@@ -15,15 +17,16 @@ import random
 import json
 import argparse
 
+from src.models.geo_linker.config import FewShots
 from src.models.utils import LLMWrapper
 import requests_cache
 from haversine import haversine_vector, Unit
+logger =  logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class IndexTuple:
     index: faiss.Index
     mapping: Dict[int, int]
-
 class GeoLinker:
     def __init__(self,
                  model: LLMWrapper,
@@ -38,6 +41,8 @@ class GeoLinker:
                     default_district: str = None,
                     do_llm_filtering: bool = False,
                     do_collective_linking: bool = False,
+                    do_llm_based_disambiguation: bool = True,
+                    few_shots: FewShots = FewShots.STATIC,
                     num_candidates: int = 3
                         ):
 
@@ -49,8 +54,11 @@ class GeoLinker:
         self.balanced_few_shots = balanced_few_shots
         self.in_context_examples, self.in_context_indexes, self.in_context_model,  = self.load_in_context_examples(few_shot_data)
         self.main_prompt = open("data/geo_link_prompt.txt").read()
+        self.main_fixed_few_shots = open("data/geo_link_examples.txt").read()
+        self.disambiguation_prompt = open("data/geo_disambiguation_prompt.txt").read()
         self.num_examples_per_class = num_examples_per_class
         self.batch_size = batch_size
+        self.few_shots = few_shots
         self.model = model
         self.nominatim_url = nominatim_url
         self.photon_url = photon_url
@@ -59,7 +67,9 @@ class GeoLinker:
         self.default_district = default_district
         self.do_llm_filtering = do_llm_filtering
         self.do_collective_linking = do_collective_linking
+        assert not do_collective_linking, "Collective linking is currently not supported"
         self.num_candidates = num_candidates
+        self.do_llm_based_disambiguation = do_llm_based_disambiguation
 
 
     @staticmethod
@@ -150,9 +160,14 @@ class GeoLinker:
             return []
         in_context_examples = self.get_in_context_examples(texts, scope="all", num=self.num_examples_per_class)
 
+
         test_prompts = []
         for sample, context in tqdm(zip(data, in_context_examples)):
-            complete_prompt = self.main_prompt + create_examples(context) 
+            complete_prompt = self.main_prompt
+            if self.few_shots == FewShots.STATIC or self.few_shots == FewShots.BOTH:
+                complete_prompt += self.main_fixed_few_shots
+            if self.few_shots == FewShots.DYNAMIC or self.few_shots == FewShots.BOTH:
+                complete_prompt += create_examples(context)
             test_prompt = [{"role": "system", "content": complete_prompt},
                       {"role": "user", "content": "Input: " + sample["text"]}]
 
@@ -166,28 +181,45 @@ class GeoLinker:
         
         messages = self.form_prompt(data)   
         result = self.model.generate(messages)
-        for sample, pred in zip(data, self._parse_llm_outputs_(result)):
-            sample["pred"] = pred
-        return data
+        return self._parse_llm_outputs_(result)
     
     
     @staticmethod
-    def _parse_llm_outputs_(outputs)->list:
-        labels = list()
-        pattern = r"\(([^,]+),\s*([^)]+)\)"
-
-
+    def _parse_llm_outputs_(outputs)-> List[List[dict]]:
+        results = []
         for generated_text in outputs:
-            pred = list()
-            generated_text = generated_text[generated_text.rfind("Extracted Entities") + len("Extracted Entities"):]
-            matches = re.findall(pattern, generated_text)
-            if matches:
-                for entity, label in matches:
-                    pred.append([entity, label])
+            skimmed_generated_text = generated_text[generated_text.rfind("Extracted Entities") + len("Extracted Entities"):]
+            bracket_left = skimmed_generated_text.find("[")
+            bracket_right = skimmed_generated_text.rfind("]")
+            if bracket_left != -1 and bracket_right != -1:
+                skimmed_generated_text = skimmed_generated_text[bracket_left: bracket_right + 1]
+
+                try:
+                    content = json.loads(skimmed_generated_text)
+                except:
+                    try:
+                        content = eval(skimmed_generated_text)
+                    except:
+                        logger.warning(f"Error parsing JSON in entity recognition: {generated_text}")
+                        content = []
+                if not isinstance(content, list):
+                    logger.warning(f"Error parsing JSON in entity recognition: {generated_text}")
+                    content = []
             else:
-                pred.append(["[]", "[]"])
-            labels.append(pred)
-        return labels
+                logger.warning(f"Error parsing JSON in entity recognition: {generated_text}")
+                content = []
+            filtered_results = []
+            for result in content:
+                if not isinstance(result, dict):
+                    continue
+                if "entity" not in result or "type" not in result:
+                    continue
+                if not isinstance(result["entity"], str) or not isinstance(result["type"], str):
+                    continue
+                filtered_results.append(result)
+            results.append(filtered_results)
+
+        return results
 
     def evaluate(self, true_labels:list, pred:list):
         '''
@@ -231,27 +263,12 @@ class GeoLinker:
             raise Exception(f"Error {response.status_code}: {response.text}")
 
 
-    def get_geo_candidates_via_nominatim(self, address: str, district: str = None, city: str = "Hamburg", country: str = "Germany"):
-        if district:
-            if district in address:
-                address = address.replace(district, "")
-            address += f", {district}"
-        if city:
-            if city in address:
-                address = address.replace(city, "")
-            address += f", {city}"
-        if country:
-            if country in address:
-                address = address.replace(country, "")
-            address += f", {country}"
-
+    def find_nominatim_candidates(self, address: str, district: str = None, city: str = "Hamburg", country: str = "Germany"):
         url = self.nominatim_url
         params = {
             "q": address,
             "format": "json",
-            "addressdetails": 1,
             "limit": 39,
-            "namedetails": 1,
         }
 
         headers = {
@@ -265,7 +282,7 @@ class GeoLinker:
             if data:
                 return data  # Return the first result
             else:
-                return None
+                return []
 
 
     def find_photon_candidates(self, address: str, district: str, city: str, country: str):
@@ -300,54 +317,66 @@ class GeoLinker:
             raise Exception(f"Error {response.status_code}: {response.text}")
 
         return found_candidates
-    def get_geo_candidates(self, location_mentions, district: str, city: str, country: str, batch_size=20):
-        all_found_candidates = []
+
+    @staticmethod
+    def clean(location_param: str, replacement):
+        if isinstance(location_param, str):
+            location_param = location_param.replace("...", "")
+            if not(location_param.strip()):
+                return replacement
+            return location_param.strip()
+        return replacement
+
+    def get_geo_candidates(self, location_mentions: List[dict], district: str, city: str, country: str, batch_size=20):
+        all_nominatim_candidates = []
+        all_photon_candidates = []
         for location in location_mentions:
-            address = location[0]
+            address = location["entity"]
+            selected_district = self.clean(location.get("district", district), district)
+            selected_city = self.clean(location.get("city", city), city)
+            selected_street = self.clean(location.get("street"), None)
+            # selected_country = self.clean(location.get("country", country), country)
+            if selected_street and selected_street != location["entity"]:
+                address += f" {selected_street}"
+            if selected_district and selected_district != location["entity"]:
+                address += f" {selected_district}"
+            if selected_city and selected_city != location["entity"]:
+                address += f" {selected_city}"
+            # if selected_country and selected_country != location["entity"]:
+            #     address += f", {selected_country}"
+
             try:
-                all_found_candidates.append(self.find_photon_candidates(address, district, city, country))
+                photon_candidates = self.find_photon_candidates(address, district, city, country)
             except Exception as e:
                 print(f"Error for {address}: {e}")
-                all_found_candidates.append([])
+                photon_candidates = []
 
-        upper_level_candidates = defaultdict(list)
-        for idx, found_candidates in enumerate(all_found_candidates):
-            for candidate in found_candidates:
-                if candidate["properties"]["type"] in ["city", "town", "village", "hamlet", "suburb", "quarter", "neighbourhood", "borough", "county", "state", "region", "province", "country", "continent"]:
-                    upper_level_candidates[idx].append(candidate["properties"]["name"])
-
-        for idx, location in enumerate(location_mentions):
-            location_specifiers = []
-            for idx_ in list(range(idx)) + list(range(idx+1, len(location_mentions))):
-                location_specifiers += upper_level_candidates[idx_]
-            address = location[0]
-            new_found_candidates = []
-            for location_specifier in location_specifiers:
-                try:
-                    new_found_candidates += self.find_photon_candidates(address + f", {location_specifier}", district, city, country)
-                except Exception as e:
-                    print(f"Error for {address}: {e}")
-            for candidate in new_found_candidates:
-                if not candidate["properties"].get("name"):
-                    continue
-                if fuzz.partial_ratio(candidate["properties"]["name"], address) > 80:
-                    all_found_candidates[idx].append(candidate)
+            try:
+                nominatim_candidates = self.find_nominatim_candidates(address, district, city, country)
+            except Exception as e:
+                print(f"Error for {address}: {e}")
+                nominatim_candidates = []
+            osm_ids_in_nominatim = set()
+            for feature in nominatim_candidates:
+                osm_ids_in_nominatim.add(f"{feature['osm_type']}{feature['osm_id']}")
+            all_nominatim_candidates.append(nominatim_candidates)
+            photon_candidates = [x for x in photon_candidates if f"{x['properties']['osm_type']}{x['properties']['osm_id']}" not in osm_ids_in_nominatim]
+            all_photon_candidates.append(photon_candidates)
 
 
 
-        all_nominatim_candidates = []
-        for candidates in all_found_candidates:
+        final_candidates = []
+        for nominatim_candidates, photon_candidates in zip(all_nominatim_candidates, all_photon_candidates):
             osm_ids = []
-            for feature in candidates:
-
+            for feature in photon_candidates:
                 osm_ids.append(f"{feature['properties']['osm_type']}{feature['properties']['osm_id']}")
-            nominatim_candidates = []
+            retrieved_nominatim_candidates = []
             for i in range(0, len(osm_ids), batch_size):
                 nominatim_candidates += self.get_nominatim_locations(osm_ids[i:i + batch_size])
 
-            all_nominatim_candidates.append(nominatim_candidates)
+            final_candidates.append(nominatim_candidates + retrieved_nominatim_candidates)
 
-        return all_nominatim_candidates
+        return final_candidates
 
     def do_bboxes_overlap(self, location1, location2):
         """Checks if two bounding boxes overlap."""
@@ -438,6 +467,81 @@ class GeoLinker:
         assignments = sorted(assignments, key=lambda x: x[0])
 
         return assignments
+    def llm_based_disambiguation(self, texts, all_candidates, predictions):
+        messages = []
+        text_to_response = defaultdict(list)
+        for text_idx, (text, candidate_lists, predictions_list) in enumerate(zip(texts, all_candidates, predictions)):
+            for mention_idx, candidates in enumerate(candidate_lists):
+                user_input = "Input: " + text
+                if not candidates:
+                    text_to_response[text_idx].append((None, mention_idx))
+                    continue
+                prediction = predictions_list[mention_idx]
+                user_input += f"\nLocation: {prediction['entity']}"
+                user_input += f"\nCandidate Locations:\n"
+                for idx, location in enumerate(candidates[:20]):
+                    user_input += f"{idx + 1}: {location['display_name']}\n"
+
+                message = [
+                    {"role": "system", "content": self.disambiguation_prompt},
+                           {"role": "user", "content": user_input}]
+                text_to_response[text_idx].append((len(messages), mention_idx))
+                messages.append(message)
+        responses = self.model.generate(messages)
+
+        final_locations = []
+        for idx in range(len(texts)):
+            if idx not in text_to_response:
+                final_locations.append([])
+                continue
+            candidate_lists = all_candidates[idx]
+            locations = []
+            for response_idx, mention_idx in text_to_response[idx]:
+                candidates = candidate_lists[mention_idx]
+                output_location = {
+                    "mention": predictions[idx][mention_idx]["entity"],
+                }
+                if response_idx is None:
+                    output_location["location"] = None
+                else:
+                    response = responses[response_idx]
+                    bracket_start = response.find("{")
+                    bracket_end = response.rfind("}")
+                    correct_candidate = None
+                    if bracket_start != -1 and bracket_end != -1:
+                        try:
+                            content = json.loads(response[bracket_start:bracket_end + 1])
+                        except json.JSONDecodeError:
+                            try:
+                                content = eval(response[bracket_start:bracket_end + 1])
+                            except:
+                                logger.warning(f"Error parsing JSON in entity disambiguation: {response}")
+                                content = None
+                        if content and "Correct candidate" in content:
+                            if content["Correct candidate"] is None:
+                                correct_candidate = None
+                            else:
+                                correct_candidate = content["Correct candidate"]
+                                try:
+                                    correct_candidate = int(correct_candidate) - 1
+                                    if correct_candidate < 0:
+                                        correct_candidate = None
+                                    if correct_candidate >= len(candidates):
+                                        correct_candidate = None
+                                except ValueError:
+                                    correct_candidate = None
+                                    logger.warning(f"Error parsing JSON in entity disambiguation: {response}")
+                    else:
+                        logger.warning(f"Error parsing JSON in entity disambiguation: {response}")
+                    if correct_candidate is None:
+                        output_location["location"] = None
+                    else:
+                        output_location["location"] = candidates[correct_candidate]
+                locations.append(output_location)
+            final_locations.append(locations)
+        return final_locations
+
+
 
     def llm_based_filtering(self, texts, locations):
         messages = []
@@ -537,44 +641,50 @@ class GeoLinker:
 
         return final_locations
 
-    def disambiguate_candidates(self, texts: List[str], all_candidates: List[List[Dict]]):
+    def disambiguate_candidates(self, texts: List[str], all_candidates: List[List[Dict]], predictions: List[List[dict]]):
 
         final_locations = []
         if self.do_collective_linking:
-            for candidates in all_candidates:
-                    candidate_locations = defaultdict(list)
-                    candidate_relevances = defaultdict(list)
-                    for idx, candidate_set in enumerate(candidates):
-                        if candidate_set is not None:
-                            for candidate in candidate_set:
-                                bounding_box = candidate["boundingbox"]
-                                bounding_box = [float(coord) for coord in bounding_box]
-                                candidate_locations[idx].append(bounding_box)
-                                candidate_relevances[idx].append(candidate["importance"])
-                    if not candidate_locations:
-                        final_locations.append([])
-                        continue
-                    assignments = self.find_best_assignments(candidate_locations, candidate_relevances)[:self.num_candidates]
-                    new_assignments = []
-                    for assignment in assignments:
-                        asssigned_locations = []
-                        for k, v in sorted(assignment[1]):
-                            if candidates[k]:
-                                asssigned_locations.append(candidates[k][v])
-                        new_assignments.append(asssigned_locations)
-                    final_locations.append(new_assignments)
+            # TODO: Not yet adapted to new ouput
+            for candidates, predictions_ in zip(all_candidates, predictions):
+                candidate_locations = defaultdict(list)
+                candidate_relevances = defaultdict(list)
+                for idx, candidate_set in enumerate(candidates):
+                    for candidate in candidate_set:
+                        bounding_box = candidate["boundingbox"]
+                        bounding_box = [float(coord) for coord in bounding_box]
+                        candidate_locations[idx].append(bounding_box)
+                        candidate_relevances[idx].append(candidate["importance"])
+                if not candidate_locations:
+                    final_locations.append([])
+                    continue
+                assignments = self.find_best_assignments(candidate_locations, candidate_relevances)[:self.num_candidates]
+                new_assignments = []
+                for assignment in assignments:
+                    asssigned_locations = []
+                    for k, v in sorted(assignment[1]):
+                        if candidates[k]:
+                            asssigned_locations.append(candidates[k][v])
+                    new_assignments.append(asssigned_locations)
+                final_locations.append(new_assignments)
 
             final_locations = self.llm_based_selection(texts, final_locations)
+        elif self.do_llm_based_disambiguation:
+            final_locations = self.llm_based_disambiguation(texts, all_candidates, predictions)
         else:
             # Sort by candidate_relevances
-            for candidates in all_candidates:
+            for candidates, predictions_ in zip(all_candidates, predictions):
                 naive_selection = []
-                for candidate_set in candidates:
-                    if not candidate_set:
-                        naive_selection.append([])
-                        continue
-                    candidate_set = sorted(candidate_set, key=lambda x: x["importance"], reverse=True)
-                    naive_selection.append(candidate_set[0])
+                for candidate_set, prediction in zip(candidates, predictions_):
+                    if candidate_set:
+                        candidate_set = sorted(candidate_set, key=lambda x: x["importance"], reverse=True)
+                        candidate = candidate_set[0]
+                    else:
+                        candidate = None
+                    naive_selection.append({
+                        "mention": prediction["entity"],
+                        "location": candidate,
+                    })
                 final_locations.append(naive_selection)
 
         if self.do_llm_filtering:
@@ -585,6 +695,7 @@ class GeoLinker:
 
 
     def link_texts(self, texts: List[str], district: str = None, city: str = None, country: str = None):
+        logger.info("Geoparsing texts...")
         if district is None:
             district = self.default_district
         if city is None:
@@ -594,15 +705,17 @@ class GeoLinker:
 
         predictions = self.identify_locations([{"text": text} for text in texts])
 
-        print("Getting geo candidates...")
+        logger.info("Getting geo candidates...")
         candidates_for_all = []
         for prediction in predictions:
-            candidates = self.get_geo_candidates(prediction["pred"], district, city, country)
+            candidates = self.get_geo_candidates(prediction, district, city, country)
             candidates_for_all.append(candidates)
 
-        print("Disambiguating candidates...")
+        logger.info("Disambiguating candidates...")
+        locations_list = self.disambiguate_candidates(texts, candidates_for_all, predictions)
 
-        return self.disambiguate_candidates(texts, candidates_for_all)
+        logger.info("Finished geoparsing texts.")
+        return locations_list
 
     def eval_main(self, test_dataset):
         '''
@@ -630,15 +743,23 @@ def create_examples(context: list):
     helper function to create examples for the prompt
     '''
     random.shuffle(context)
-    prompt = "\n\n"
-    prompt += "**Examples:**\n"
+    prompt = ""
     for idx, elem in enumerate(context):
-        prompt += f"{1+idx}.\n```\nInput: \"{elem['text']}\"\nExplanation: ...\nExtracted Entities: ["
+        text = elem["text"]
+        text=text.strip()
+        prompt += f"Input: {text}\nExplanation:\n...\n\nExtracted Entities:\n"
+        list_of_entities = []
         for ann_idx, anno in enumerate(elem["annotation"]):
-            prompt += f"({anno[0]}, {anno[1]})"
-            if ann_idx < len(elem["annotation"]) - 1:
-                prompt += ", "
-        prompt += "]\n```\n\n"
+            list_of_entities.append({
+                "entity": anno[0],
+                "type": anno[1],
+                "street": "...",
+                "district": "...",
+                "city": "...",
+                "country": "...",
+            })
+        prompt += json.dumps(list_of_entities, indent=4)
+        prompt += "\n\n"
     return prompt
 
 def extract_data(file_dir:str):

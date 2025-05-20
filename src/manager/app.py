@@ -1,5 +1,8 @@
 import asyncio
+import json
+import os
 import sys
+import uuid
 from io import BytesIO
 from typing import List, Optional
 
@@ -18,11 +21,20 @@ from src.models.image.config import ImageResponse
 from src.models.text.config import TextRequest, BatchTextRequest, TextResponse
 from src.models.image.config import Settings as ImageSettings
 import logging
-logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+
+logging.basicConfig(
+    level=getattr(logging, log_level, logging.INFO),  # fallback to INFO if invalid
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    stream=sys.stdout,
+)
+
 logger =  logging.getLogger(__name__)
 
 # Define the model and tokenizer as global variables
 event_sensor: EventSensor = None
+background_task: asyncio.Task = None
 
 app = FastAPI()
 
@@ -34,11 +46,18 @@ class Settings(BaseSettings):
     geo_linker: GeoLinkerSettings = GeoLinkerSettings()
     download_images: bool = False
     always_geo_link: bool = True
+    target_server: str = "https://rescue-mate.uhh-net.de"
+    target_server_access_token: str = "your_access_token_here"
+    target_server_dataset: str = "social_media"
 
     class Config:
         env_nested_delimiter = '__'
 
 settings = Settings()
+authorization_headers = {"Authorization": f"Bearer {settings.target_server_access_token}"}
+# Create the PostCollector instance
+collector = SocialMediaCollector()
+
 logger.info("Settings loaded from environment variables.")
 logger.info(f"Settings: {settings}")
 
@@ -88,9 +107,7 @@ def retrieve_and_classify_posts(collector):
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-
-    # Create the PostCollector instance
-    collector = SocialMediaCollector()
+    global collector
 
     # Start the collector (run the WebSocket connection in the background)
     collector.start()
@@ -102,6 +119,55 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.send_json(data)
         await asyncio.sleep(1)  # Send data every second
 
+def send_data_to_target_server(data):
+    if data:
+        for elem in data:
+            # Generate UUID for each post
+            elem["post_id"] = str(uuid.uuid4())
+        data_as_json = json.dumps(data)
+        response = requests.post(f"{settings.target_server}/datasets/{settings.target_server_dataset}", headers=authorization_headers,
+                      files={
+                        "data": ("data.json", data_as_json.encode("utf-8"), "application/json")
+                        })
+        if response.status_code != 200:
+            logger.warning(f"Failed to send data to target server: {response.status_code} - {response.text}")
+        else:
+            logger.info(f"Data sent to target server: {settings.target_server}/datasets/{settings.target_server_dataset}/data")
+async def send_data_periodically():
+    global collector
+
+    while True:
+        data = retrieve_and_classify_posts(collector)
+
+        send_data_to_target_server(data)
+        await asyncio.sleep(1)  # Send data every second
+def setup_platform_feed():
+    # Check if target server is reachable
+    response = requests.get(settings.target_server + "/datasets", headers=authorization_headers)
+    if response.status_code != 200:
+        logger.warning(f"Target server is not reachable: {settings.target_server}")
+        return
+
+
+    logger.info(f"Target server is reachable: {settings.target_server}")
+    # Check if dataset exists
+    response = requests.get(f"{settings.target_server}/datasets/{settings.target_server_dataset}", headers=authorization_headers)
+    if response.status_code == 404:
+        logger.info(f"Dataset does not exist: {settings.target_server_dataset}. Creating it.")
+        with open("data/rml.ttl", "rb") as rml_file:
+            response = requests.post(
+                f"{settings.target_server}/datasets",
+                data={"name": settings.target_server_dataset},
+                files={"rml": rml_file},
+                headers=authorization_headers
+            )
+    if response.status_code != 200:
+        logger.warning(f"Failed setup: {settings.target_server_dataset}.")
+        return
+
+
+
+    return asyncio.create_task(send_data_periodically())
 
 @app.on_event("startup")
 async def load_model():
@@ -111,6 +177,39 @@ async def load_model():
     global event_sensor
 
     event_sensor = EventSensor(settings)
+
+async def start_background_task():
+    global background_task, collector
+    if background_task is None or background_task.done():
+        logger.info("Starting background task.")
+        collector.start()
+        background_task = setup_platform_feed()
+    else:
+        logger.info("Background task is already running.")
+
+async def stop_background_task():
+    global background_task
+    global collector
+    if background_task and not background_task.done():
+        logger.info("Stopping background task.")
+        collector.stop()
+        background_task.cancel()
+        try:
+            await background_task
+        except asyncio.CancelledError:
+            logger.info("Background task cancelled successfully.")
+    else:
+        logger.info("No background task running.")
+
+@app.post("/start-feed")
+async def start_feed():
+    await start_background_task()
+    return {"status": "started"}
+
+@app.post("/stop-feed")
+async def stop_feed():
+    await stop_background_task()
+    return {"status": "stopped"}
 
 @app.post("/predict_text", summary="Predict the classes of the given text.")
 async def predict_text(request: TextRequest) -> TextResponse:
@@ -232,4 +331,4 @@ async def predict_social_media_post(text: str = Form(...), images: List[UploadFi
 if __name__ == "__main__":
     # Start the FastAPI app
     import uvicorn
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("app:app", host="0.0.0.0", port=8060, reload=False)

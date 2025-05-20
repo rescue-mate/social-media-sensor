@@ -167,7 +167,8 @@ class PostCollector:
     def stop(self):
         """Stops the WebSocket connection."""
         self._running = False
-        self.stream_handler.cancel()
+        if self.stream_handler:
+            self.stream_handler.close()
 
     def get_all_posts(self, num_posts=32):
         """Returns all posts collected so far."""

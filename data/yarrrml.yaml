@@ -1,0 +1,45 @@
+prefixes:
+  sm: "http://social_media_data.com/"
+  smp: "http://social_media_data.com/posts/"
+  sml: "http://social_media_data.com/locations/"
+  smpl: "http://social_media_data.com/platforms/"
+  smc: "http://social_media_data.com/categories/"
+  xsd: "http://www.w3.org/2001/XMLSchema#"
+
+sources:
+  posts_data:
+    access: data.json
+    referenceFormulation: jsonpath
+    iterator: "$[*]"  # Top-level array!
+  location_data:
+    access: data.json
+    referenceFormulation: jsonpath
+    iterator: "$[*].geo_linked_entities[*]"  # Top-level array!
+
+mappings:
+  post:
+    sources: posts_data
+    s: "http://social_media_data.com/posts/$(post_id)"
+    po:
+      - [ a, sm:Post ]
+      - [ sm:text, "$(text)" ]
+      - [ sm:created_at, "$(created_at)", xsd:dateTime ]
+      - [ sm:platform, smpl:$(platform)~iri]
+      - [ sm:user, "$(user)"]
+      - [ sm:predicted_category,smc:$(prediction)~iri]
+      - p: sm:location
+        o: sm:$(geo_linked_entities[*].place_id)~iri
+
+  location:
+    sources:
+      - location_data
+    s: "http://social_media_data.com/locations/$(place_id)"
+    po:
+      - [ a, sm:Location ]
+      - [ sm:name, "$(name)" ]
+      - [ sm:latitude, "$(lat)", xsd:decimal ]
+      - [ sm:longitude, "$(lon)", xsd:decimal ]
+      - [ sm:road, "$(address.road)" ]
+      - [ sm:city, "$(address.city)" ]
+      - [ sm:postcode, "$(address.postcode)" ]
+      - [ sm:country, "$(address.country)" ]

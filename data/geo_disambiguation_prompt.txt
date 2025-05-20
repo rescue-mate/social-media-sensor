@@ -1,0 +1,90 @@
+You are a helpful assistant. Respond using natural language only. Do not output code unless explicitly asked.
+Given is an input text and multiple candidate locations for specific mentioned location. Return the correct candidate for each.
+Each location is represented by a counter and its full address. The input looks as follows:
+
+Input: ...
+Location: ...
+Candidate locations:
+1: <full_address>
+2: <full_address>
+...
+
+Please return the correct candidate in the following way. If no location is mentioned, return 'None':
+Decision:
+{
+  'Explanation': 'Location <number> is mentioned in the text because ...'
+  'Correct candidate': <number>,
+}
+
+Here are some examples:
+
+Example 1
+Input: In Hamburger Stadtpark versammelten sich am Wochenende hunderte Besucher zu einem Musikfestival.
+Location: Hamburger Stadtpark
+Candidate locations:
+1: Hamburg, Deutschland
+2: Stadtpark Norderstedt, Schleswig-Holstein, Deutschland
+3: Hamburger DOM, Glacischaussee, St. Pauli, Hamburg, Deutschland
+4: Hamburger Stadtpark, Hamburg-Nord, Hamburg, Deutschland
+5: Stadtparksee, Hamburg-Nord, Hamburg, Deutschland
+6: Hamburger Messe, Karolinenviertel, Hamburg-Mitte, Hamburg, Deutschland
+
+Decision:
+{
+  "Explanation": "Location 4 is correct because the 'Hamburger Stadtpark' is explicitly mentioned. The other options are either too general (e.g., Hamburg) or refer to other places such as the DOM or the exhibition grounds.",
+  "Correct candidate": 4
+}
+
+Example 2
+Input: Das neue Bürogebäude 'Sky Tower' in Frankfurt wurde nach drei Jahren Bauzeit eröffnet.
+Location: Sky Tower
+Candidate locations:
+1: Frankfurt, Deutschland
+2: Frankfurt am Main Hauptbahnhof, Frankfurt, Deutschland
+3: Frankfurt Flughafen, Frankfurt, Deutschland
+4: Europaturm, Ginnheim, Frankfurt, Deutschland
+5: Main Tower, Innenstadt, Frankfurt, Deutschland
+6: Frankfurt Messe, Frankfurt, Deutschland
+7: Deutsche Bank Hochhaus, Frankfurt, Deutschland
+
+Decision:
+{
+  "Explanation": "None of the extracted locations match the mentioned location 'Sky Tower'. It appears to be a specific new building that is not included in the list.",
+  "Correct candidate": "None"
+}
+
+Example 3
+Input: In Wentorf bei Hamburg kam es am Wochenende zu einem Wasserrohrbruch in mehreren Haushalten.
+Location: Wentorf bei Hamburg
+Candidate locations:
+1: Hamburg, Deutschland
+2: Wentorf, Schleswig-Holstein, Deutschland
+3: Wentorf bei Hamburg, Kreis Herzogtum Lauenburg, Schleswig-Holstein, Deutschland
+4: Reinbek, Schleswig-Holstein, Deutschland
+5: Bergedorf, Hamburg, Deutschland
+6: Glinde, Schleswig-Holstein, Deutschland
+
+Decision:
+{
+  "Explanation": "Location 3 is correct because it exactly reflects the full place name 'Wentorf bei Hamburg'. Location 2 is too vague and could theoretically refer to a different 'Wentorf'.",
+  "Correct candidate": 3
+}
+
+Example 4
+Input: In Kreuzberg herrschte am Wochenende reges Treiben auf den Straßen und Plätzen.
+Location: Kreuzberg
+Candidate locations:
+1: Görlitzer Park, Kreuzberg, Berlin, Deutschland
+2: Oranienstraße 25, Kreuzberg, Berlin, Deutschland
+3: SO36, Oranienstraße, Kreuzberg, Berlin, Deutschland
+4: Kottbusser Tor, Kreuzberg, Berlin, Deutschland
+5: Kreuzberg, Berlin, Deutschland
+6: Admiralbrücke, Kreuzberg, Berlin, Deutschland
+
+Decision:
+{
+  "Explanation": "Location 5 is correct because 'Kreuzberg' is explicitly mentioned and refers to the entire district. The other options are all sub-regions, streets, or landmarks within Kreuzberg and thus too specific to represent the intended location on their own.",
+  "Correct candidate": 5
+}
+
+
